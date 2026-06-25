@@ -2,13 +2,16 @@ import "reflect-metadata";
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import { createServer } from 'http';
 import { config } from './config/index.js';
 import riskRoutes from './routes/risk.js';
 import reportRoutes from './routes/reports.js';
 import { initializeDatabase } from './db.js';
 import { initializeRedis } from './services/CacheService.js';
+import { initializeSocket } from './services/SocketService.js';
 
 const app = express();
+const httpServer = createServer(app);
 const port = config.PORT;
 
 app.use(helmet());
@@ -26,8 +29,9 @@ async function startServer() {
   try {
     await initializeDatabase();
     await initializeRedis();
+    initializeSocket(httpServer);
 
-    app.listen(port, () => {
+    httpServer.listen(port, () => {
       console.log(`HERP Backend listening at http://localhost:${port}`);
     });
   } catch (error) {
