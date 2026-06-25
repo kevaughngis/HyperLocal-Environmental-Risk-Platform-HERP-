@@ -1,0 +1,7 @@
+1. Initialize project structure and environment.
+2. Setup Backend (Node.js/Express/TypeScript).
+3. Setup Frontend (React/TypeScript/Tailwind).
+4. Configure Docker and Docker Compose.
+5. Fix backend build configuration and clean up source artifacts.
+6. Enhance Frontend Dashboard with missing panels and interactive map.
+7. Complete pre-commit steps and submit.

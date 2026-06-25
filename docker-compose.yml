@@ -1,0 +1,41 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+      - redis
+      - risk_engine
+    environment:
+      - PORT=3001
+      - DATABASE_URL=postgresql://user:password@db:5432/herp
+      - REDIS_URL=redis://redis:6379
+      - RISK_ENGINE_URL=http://risk_engine:8000
+
+  risk_engine:
+    build: ./risk_engine_py
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  db:
+    image: postgis/postgis:15-3.3-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=herp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  postgres_data:
