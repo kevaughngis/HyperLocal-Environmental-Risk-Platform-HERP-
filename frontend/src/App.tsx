@@ -5,7 +5,6 @@ import {
   Droplets,
   AlertTriangle,
   Sun,
-  Thermometer,
   ShieldCheck,
   Map as MapIcon,
   Activity,
@@ -13,10 +12,11 @@ import {
   Flower2,
   Sprout,
   BarChart3,
-  Info
+  Info,
+  Layers
 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, LayersControl } from 'react-leaflet';
 import { getHealth, getAssessment } from './api/client';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -42,6 +42,7 @@ interface Assessment {
   pollen: { tree: number; grass: number; weed: number };
   floodRisk: { level: string; score: number };
   soil: { moisture: number; temperature: number };
+  satellite: { ndvi: number; lastPass: string; cloudCover: number };
   wildfire: { status: string; details: string };
   compliance: { status: string; reminders: string[] };
   aiRisk?: { hazards: string[]; level: string; explanation: string };
@@ -109,10 +110,21 @@ function App() {
             </span>
           </div>
           <MapContainer center={[45.4215, -75.6972]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <LayersControl position="topright">
+              <LayersControl.BaseLayer checked name="OpenStreetMap">
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+              </LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="Satellite">
+                <TileLayer
+                  attribution='&copy; <a href="https://www.sentinel-hub.com/">Sentinel Hub</a>'
+                  url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg"
+                />
+              </LayersControl.BaseLayer>
+            </LayersControl>
+
             {assessment && (
               <Marker position={[assessment.location.lat, assessment.location.lon]}>
                 <Popup>
@@ -159,7 +171,8 @@ function App() {
         <Panel icon={<Droplets className="text-blue-500" />} title="Flood Risk" value={assessment?.floodRisk.level ?? "--"} detail={`Risk Score: ${assessment?.floodRisk.score ?? "--"}`} />
         <Panel icon={<Flame className="text-orange-600" />} title="Wildfire Smoke" value={assessment?.wildfire.status ?? "--"} detail={assessment?.wildfire.details ?? "--"} />
         <Panel icon={<Flower2 className="text-pink-400" />} title="Pollen" value={assessment ? (assessment.pollen.tree >= 4 ? "Critical" : (assessment.pollen.tree >= 2 ? "High" : "Low")) : "--"} detail={`Tree/Grass/Weed: ${assessment?.pollen.tree}/${assessment?.pollen.grass}/${assessment?.pollen.weed}`} />
-        <Panel icon={<Sprout className="text-green-600" />} title="Soil" value={assessment ? (assessment.soil.moisture > 30 ? "Optimal" : (assessment.soil.moisture < 15 ? "Drought" : "Dry")) : "--"} detail={`Moisture: ${assessment?.soil.moisture.toFixed(0) ?? '--'}%`} />
+        <Panel icon={<Sprout className="text-green-600" />} title="Soil & Vegetation" value={assessment ? (assessment.soil.moisture > 30 ? "Optimal" : (assessment.soil.moisture < 15 ? "Drought" : "Dry")) : "--"} detail={`Moisture: ${assessment?.soil.moisture.toFixed(0) ?? '--'}% | NDVI: ${assessment?.satellite.ndvi.toFixed(2) ?? '--'}`} />
+        <Panel icon={<Layers className="text-indigo-400" />} title="Satellite" value={assessment ? (assessment.satellite.ndvi > 0.6 ? "Healthy" : "Stressed") : "--"} detail={`Pass: ${assessment ? new Date(assessment.satellite.lastPass).toLocaleDateString() : '--'}`} />
         <Panel icon={<ShieldCheck className="text-green-500" />} title="Compliance" value={assessment?.compliance.status ?? "--"} detail={`${assessment?.compliance.reminders.length ?? 0} active alerts`} />
         <Panel icon={<AlertTriangle className="text-orange-500" />} title="AI Risk Level" value={assessment?.aiRisk?.level ?? "Stable"} detail={assessment?.aiRisk?.hazards.length ? `${assessment.aiRisk.hazards.length} compound hazards` : "No combined threats"} />
       </main>

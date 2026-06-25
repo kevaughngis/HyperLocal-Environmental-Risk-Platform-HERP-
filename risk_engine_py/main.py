@@ -55,6 +55,11 @@ async def analyze_risk(data: Dict[str, Any] = Body(...)):
     if wildfire.get("smokeConcentration") == "High" and weather.get("windSpeed", 0) > 30:
         compounds.append("Rapid smoke dispersion: Wildfire smoke levels may fluctuate rapidly due to high winds.")
 
+    # 6. Flash Flood Risk (Heavy Rain + Saturated Soil)
+    flood = data.get("floodRisk", {})
+    if flood.get("score", 0) > 60 and soil.get("moisture", 0) > 75:
+        compounds.append("Flash flood alert: Saturated soil combined with heavy precipitation significantly increases runoff.")
+
     hazard_level = "Stable"
     if len(compounds) >= 3:
         hazard_level = "Critical"
