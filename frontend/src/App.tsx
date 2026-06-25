@@ -13,10 +13,14 @@ import {
   Sprout,
   BarChart3,
   Info,
-  Layers
+  Layers,
+  MessageSquare,
+  Bell,
+  X,
+  MapPin
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, LayersControl } from 'react-leaflet';
-import { getHealth, getAssessment } from './api/client';
+import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMapEvents } from 'react-leaflet';
+import { getHealth, getAssessment, getReports, createReport } from './api/client';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -33,6 +37,23 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
+interface CommunityReport {
+  id: string;
+  latitude: number;
+  longitude: number;
+  type: string;
+  description: string;
+  createdAt: string;
+}
+
+interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  timestamp: Date;
+}
+
 interface Assessment {
   riskScore: number;
   location: { name: string; lat: number; lon: number };
@@ -45,13 +66,27 @@ interface Assessment {
   satellite: { ndvi: number; lastPass: string; cloudCover: number };
   wildfire: { status: string; details: string };
   compliance: { status: string; reminders: string[] };
-  aiRisk?: { hazards: string[]; level: string; explanation: string };
+  aiRisk?: { hazards: string[]; level: string; explanation: string; trend?: string };
   recommendations: string[];
+}
+
+function MapEvents({ onMapClick }: { onMapClick: (lat: number, lon: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
 }
 
 function App() {
   const [backendStatus, setBackendStatus] = useState<string>('Checking...');
   const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [reports, setReports] = useState<CommunityReport[]>([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [newReport, setNewReport] = useState({ type: 'Flooding', description: '', lat: 0, lon: 0 });
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     getHealth()
@@ -59,9 +94,57 @@ function App() {
       .catch(() => setBackendStatus('Backend Unreachable'));
 
     getAssessment()
-      .then(res => setAssessment(res.data))
+      .then(res => {
+        setAssessment(res.data);
+        // Generate notifications based on assessment
+        const newNotifications: AppNotification[] = [];
+        if (res.data.riskScore > 70) {
+          newNotifications.push({
+            id: 'risk-critical',
+            title: 'Critical Risk Alert',
+            message: 'Environmental risk has exceeded critical thresholds. Review safety protocols.',
+            severity: 'critical',
+            timestamp: new Date()
+          });
+        }
+        res.data.compliance.reminders.forEach((rem: string, i: number) => {
+          if (rem.includes('MANDATORY') || rem.includes('BAN')) {
+             newNotifications.push({
+               id: `comp-${i}`,
+               title: 'Compliance Action Required',
+               message: rem,
+               severity: 'warning',
+               timestamp: new Date()
+             });
+          }
+        });
+        setNotifications(newNotifications);
+      })
       .catch(err => console.error("Failed to fetch assessment", err));
+
+    getReports()
+      .then(res => setReports(res.data))
+      .catch(err => console.error("Failed to fetch reports", err));
   }, []);
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assessment) return;
+    try {
+      await createReport({
+        ...newReport,
+        lat: newReport.lat || assessment.location.lat,
+        lon: newReport.lon || assessment.location.lon
+      });
+      setShowReportModal(false);
+      setNewReport({ type: 'Flooding', description: '', lat: 0, lon: 0 });
+      // Refresh reports
+      const res = await getReports();
+      setReports(res.data);
+    } catch (err) {
+      console.error("Failed to submit report", err);
+    }
+  };
 
   // Calculate simulated ESG metrics based on environment
   const esgMetrics = assessment ? {
@@ -77,9 +160,55 @@ function App() {
           <h1 className="text-3xl font-bold text-blue-400 tracking-tight">HERP</h1>
           <p className="text-slate-400 text-sm">HyperLocal Environmental Risk Platform</p>
         </div>
-        <div className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 shadow-lg">
-          <Activity size={18} className={backendStatus.includes('running') ? 'text-green-500' : 'text-red-500'} />
-          <span className="text-sm font-medium">{backendStatus}</span>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium transition-colors shadow-lg"
+          >
+            <MessageSquare size={18} /> Report Hazard
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 bg-slate-800 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors shadow-lg"
+            >
+              <Bell size={20} />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] flex items-center justify-center font-bold">
+                  {notifications.length}
+                </span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-[3000] overflow-hidden">
+                <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                  <h4 className="font-bold">Notifications</h4>
+                  <button onClick={() => setShowNotifications(false)}><X size={16} /></button>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 text-sm">No new notifications</div>
+                  ) : (
+                    notifications.map(n => (
+                      <div key={n.id} className="p-4 border-b border-slate-700/50 hover:bg-slate-750 transition-colors">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`w-2 h-2 rounded-full ${n.severity === 'critical' ? 'bg-red-500' : 'bg-orange-500'}`} />
+                          <span className="text-xs font-bold uppercase tracking-wider">{n.title}</span>
+                        </div>
+                        <p className="text-sm text-slate-300">{n.message}</p>
+                        <span className="text-[10px] text-slate-500 block mt-2">{n.timestamp.toLocaleTimeString()}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 shadow-lg">
+            <Activity size={18} className={backendStatus.includes('running') ? 'text-green-500' : 'text-red-500'} />
+            <span className="text-sm font-medium">{backendStatus}</span>
+          </div>
         </div>
       </header>
 
@@ -92,9 +221,17 @@ function App() {
                 <span className="text-4xl font-bold">{assessment?.riskScore ?? '--'}</span>
              </div>
           </div>
-          <p className={`mt-4 ${assessment && assessment.riskScore > 50 ? 'text-red-400' : 'text-green-400'} font-bold text-center`}>
+          <p className={`mt-4 ${assessment && assessment.riskScore > 50 ? 'text-red-400' : 'text-green-400'} font-bold text-center uppercase tracking-wider`}>
             {assessment ? (assessment.riskScore > 60 ? 'HIGH RISK' : (assessment.riskScore > 30 ? 'MODERATE RISK' : 'LOW RISK')) : 'Loading...'}
           </p>
+          {assessment?.aiRisk?.trend && (
+            <div className="mt-2 flex items-center gap-1.5 px-3 py-1 bg-slate-900/50 rounded-full border border-slate-700/50">
+               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Trend:</span>
+               <span className={`text-xs font-bold ${assessment.aiRisk.trend === 'Rising' ? 'text-red-400' : (assessment.aiRisk.trend === 'Falling' ? 'text-green-400' : 'text-blue-400')}`}>
+                 {assessment.aiRisk.trend}
+               </span>
+            </div>
+          )}
           {assessment?.aiRisk?.explanation && (
             <p className="text-xs text-slate-400 mt-4 text-center italic border-t border-slate-700 pt-3">
               "{assessment.aiRisk.explanation}"
@@ -110,6 +247,10 @@ function App() {
             </span>
           </div>
           <MapContainer center={[45.4215, -75.6972]} zoom={13} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
+            <MapEvents onMapClick={(lat, lon) => {
+              setNewReport(prev => ({ ...prev, lat, lon }));
+              setShowReportModal(true);
+            }} />
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="OpenStreetMap">
                 <TileLayer
@@ -136,6 +277,18 @@ function App() {
                 </Popup>
               </Marker>
             )}
+
+            {reports.map(report => (
+              <Marker key={report.id} position={[report.latitude, report.longitude]}>
+                <Popup>
+                  <div className="text-slate-900">
+                    <strong className="block text-red-600">{report.type}</strong>
+                    <p className="text-sm">{report.description}</p>
+                    <span className="text-xs text-slate-500">{new Date(report.createdAt).toLocaleString()}</span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
           </MapContainer>
         </div>
 
@@ -213,6 +366,69 @@ function App() {
           </div>
         </div>
       </section>
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-700">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <MessageSquare className="text-blue-400" /> Report Local Hazard
+              </h3>
+            </div>
+            <form onSubmit={handleReportSubmit} className="p-6 space-y-4">
+              {newReport.lat !== 0 && (
+                <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg flex items-center gap-2 text-xs text-blue-300">
+                  <MapPin size={14} />
+                  <span>Location pinned: {newReport.lat.toFixed(4)}, {newReport.lon.toFixed(4)}</span>
+                </div>
+              )}
+              <div>
+                <label htmlFor="hazard-type" className="block text-sm font-medium text-slate-400 mb-1">Hazard Type</label>
+                <select
+                  id="hazard-type"
+                  value={newReport.type}
+                  onChange={e => setNewReport({...newReport, type: e.target.value})}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-100 outline-none focus:border-blue-500"
+                >
+                  <option>Flooding</option>
+                  <option>Smoke/Fire</option>
+                  <option>Fallen Tree/Debris</option>
+                  <option>Localized Pollution</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="hazard-description" className="block text-sm font-medium text-slate-400 mb-1">Description</label>
+                <textarea
+                  id="hazard-description"
+                  required
+                  rows={3}
+                  value={newReport.description}
+                  onChange={e => setNewReport({...newReport, description: e.target.value})}
+                  placeholder="Tell us what you see..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-100 outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(false)}
+                  className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors"
+                >
+                  Submit Report
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

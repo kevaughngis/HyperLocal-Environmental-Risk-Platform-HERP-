@@ -9,3 +9,9 @@ export const api = axios.create({
 export const getHealth = () => axios.get(`${API_BASE_URL.replace('/api/v1', '')}/health`);
 export const getAssessment = (lat?: number, lon?: number) =>
   api.get('/assessment', { params: { lat, lon } });
+
+export const getReports = (lat?: number, lon?: number) =>
+  api.get('/reports', { params: { lat, lon } });
+
+export const createReport = (data: { lat: number, lon: number, type: string, description: string }) =>
+  api.post('/reports', data);
