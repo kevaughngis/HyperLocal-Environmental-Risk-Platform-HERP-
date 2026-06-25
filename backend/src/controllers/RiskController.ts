@@ -5,6 +5,7 @@ import { PollenService } from '../services/PollenService.js';
 import { FloodService } from '../services/FloodService.js';
 import { SoilService } from '../services/SoilService.js';
 import { WildfireService } from '../services/WildfireService.js';
+import { SatelliteService } from '../services/SatelliteService.js';
 import { ComplianceService } from '../services/ComplianceService.js';
 import { AIRiskService } from '../services/AIRiskService.js';
 import { AppDataSource } from '../db.js';
@@ -18,15 +19,17 @@ export const getRiskAssessment = async (req: Request, res: Response) => {
     const weatherData = await WeatherService.getEnvironmentalData(lat, lon);
     const pollenData = await PollenService.getPollenData(lat, lon);
     const floodData = await FloodService.getFloodRisk(lat, lon, weatherData.weather?.precipitation || 0);
-    const soilData = await SoilService.getSoilData(lat, lon, weatherData.weather?.temp || 20);
+    const soilData = await SoilService.getSoilData(lat, lon);
     const wildfireData = await WildfireService.getWildfireSmoke(lat, lon);
+    const satelliteData = await SatelliteService.getIntelligence(lat, lon);
 
     const combinedData = {
       ...weatherData,
       pollen: pollenData,
       floodRisk: floodData,
       soil: soilData,
-      wildfire: wildfireData
+      wildfire: wildfireData,
+      satellite: satelliteData
     };
 
     const complianceReminders = ComplianceService.getReminders(combinedData);
