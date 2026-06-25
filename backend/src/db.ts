@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { EnvironmentalAssessment } from "./models/Assessment.js";
+import { CommunityReport } from "./models/Report.js";
 import { config } from "./config/index.js";
 
 export const AppDataSource = new DataSource({
@@ -8,7 +9,7 @@ export const AppDataSource = new DataSource({
     url: config.DATABASE_URL || "postgres://postgres:postgres@localhost:5432/herp",
     synchronize: config.NODE_ENV === "development",
     logging: false,
-    entities: [EnvironmentalAssessment],
+    entities: [EnvironmentalAssessment, CommunityReport],
     migrations: [],
     subscribers: [],
 });

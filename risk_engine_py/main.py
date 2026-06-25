@@ -60,6 +60,14 @@ async def analyze_risk(data: Dict[str, Any] = Body(...)):
     if flood.get("score", 0) > 60 and soil.get("moisture", 0) > 75:
         compounds.append("Flash flood alert: Saturated soil combined with heavy precipitation significantly increases runoff.")
 
+    # 7. Air Stagnation (Low Wind + High AQI)
+    if weather.get("windSpeed", 0) < 5 and air_quality.get("aqi", 0) > 120:
+        compounds.append("Air Stagnation: Low wind speeds are preventing pollutant dispersal. Air quality may worsen rapidly.")
+
+    # 8. Extreme Heat Stress (High Humidity + High Temp)
+    if weather.get("temp", 0) > 33 and weather.get("humidity", 0) > 70:
+        compounds.append("Extreme Heat Stress: High humidity is hindering sweat evaporation, increasing the risk of heatstroke.")
+
     hazard_level = "Stable"
     if len(compounds) >= 3:
         hazard_level = "Critical"
@@ -68,11 +76,19 @@ async def analyze_risk(data: Dict[str, Any] = Body(...)):
 
     explanation = generate_explanation(data, compounds)
 
+    # Simple simulated trend prediction
+    trend = "Stable"
+    if len(compounds) > 2 or weather.get("windSpeed", 0) > 45:
+        trend = "Rising"
+    elif len(compounds) == 0 and weather.get("temp", 0) < 25:
+        trend = "Falling"
+
     return {
         "compound_hazards": compounds,
         "hazard_level": hazard_level,
         "explanation": explanation,
-        "engine": "Python Risk Engine v2.0"
+        "trend": trend,
+        "engine": "Python Risk Engine v2.2"
     }
 
 if __name__ == "__main__":
