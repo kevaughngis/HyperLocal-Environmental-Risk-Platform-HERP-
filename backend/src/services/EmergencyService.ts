@@ -1,5 +1,3 @@
-import { HazardType } from '../models/Report.js';
-
 export interface EvacuationRoute {
   id: string;
   name: string;
