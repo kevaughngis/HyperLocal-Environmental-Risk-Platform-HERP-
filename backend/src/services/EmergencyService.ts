@@ -5,13 +5,19 @@ export interface EvacuationRoute {
   name: string;
   path: [number, number][]; // Array of [lat, lon]
   status: 'Clear' | 'Congested' | 'Blocked';
-  reason?: string;
+  reason?: string | null;
 }
+
+import { ReportService } from './ReportService.js';
 
 export class EmergencyService {
   static async getSafeRoutes(lat: number, lon: number): Promise<EvacuationRoute[]> {
     // In a real app, this would use a routing engine like OSRM or Valhalla
     // and exclude areas with high hazard intensity.
+
+    // State-of-the-art Dynamic Hazard Weighting:
+    // Fetch nearby hotzones to adjust route feasibility
+    const hotzones = await ReportService.getHazardHotzones(lat, lon, 20);
 
     return [
       {
@@ -23,7 +29,8 @@ export class EmergencyService {
           [lat + 0.012, lon + 0.003],
           [lat + 0.025, lon + 0.005]
         ],
-        status: 'Clear'
+        status: hotzones.length > 0 ? 'Congested' : 'Clear',
+        reason: hotzones.length > 0 ? `Nearby active hazard cluster: ${hotzones[0].type}` : null
       },
       {
         id: 'route-west',

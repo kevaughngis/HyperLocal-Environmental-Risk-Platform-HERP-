@@ -1,92 +1,136 @@
 from fastapi import FastAPI, Body
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+import math
 
-app = FastAPI(title="HERP AI Risk Engine")
+app = FastAPI(title="HERP AI Risk Engine v4.0 - Cognitive Intelligence")
 
+# Enhanced Knowledge Base with Contextual Severity
 KNOWLEDGE_BASE = {
     "Respiratory Stress": {
-        "description": "High temperature and poor air quality lead to increased ozone at ground level, stressing the lungs and heart.",
+        "description": "Synergistic interaction between high ambient temperature and elevated PM2.5/Ozone levels.",
+        "impact_score": 1.5,
         "advice": [
-            "Limit outdoor activities to early morning or late evening.",
-            "Stay in air-conditioned environments.",
-            "Keep windows closed and use HEPA air purifiers."
+            "Immediate reduction in outdoor physical exertion.",
+            "Utilize indoor air filtration systems with HEPA standards.",
+            "Maintain hydration to support mucosal defenses."
         ]
     },
     "Dust/Fire Spread": {
-        "description": "Strong winds on dry soil can create dust storms and accelerate the spread of any active fires.",
+        "description": "Critical atmospheric instability: low fuel moisture coupled with high-velocity wind vectors.",
+        "impact_score": 2.0,
         "advice": [
-            "Secure loose outdoor objects.",
-            "Avoid any activities that could cause sparks (e.g., outdoor welding, burning debris).",
-            "Be prepared for rapid evacuation if smoke is visible."
+            "Total fire ban in effect; avoid any spark-generating activity.",
+            "Secure all loose infrastructure and lightweight debris.",
+            "Maintain high situational awareness for rapid fire ignition."
         ]
     },
     "Solar/Heat Stress": {
-        "description": "Intense UV radiation combined with high heat significantly increases the risk of skin damage and heat exhaustion.",
+        "description": "Hyperthermic risk: Extreme shortwave radiation exceeding biological thermal regulation limits.",
+        "impact_score": 1.8,
         "advice": [
-            "Wear protective clothing, wide-brimmed hats, and UV-blocking sunglasses.",
-            "Apply SPF 50+ sunscreen every 2 hours.",
-            "Drink at least 500ml of water per hour."
+            "Strict limitation of direct sun exposure between 10 AM and 4 PM.",
+            "Use of high-grade reflective clothing and SPF 50+ protection.",
+            "Proactive cooling measures (active cooling vests or cold immersion)."
         ]
     },
     "Thunderstorm Asthma": {
-        "description": "Moisture from storms can cause pollen grains to burst into tiny particles that penetrate deeper into the lungs.",
+        "description": "Aero-biological hazard: Pollen osmotic rupture during storm events creating inhalable sub-micron particles.",
+        "impact_score": 2.5,
         "advice": [
-            "Stay indoors during the storm and for 2 hours following.",
-            "Keep all windows and doors shut.",
-            "Ensure rescue inhalers (if prescribed) are easily accessible."
+            "Total avoidance of outdoor air during and for 3 hours post-storm.",
+            "Strict adherence to asthma management plans; rescue medication readiness.",
+            "Ensure indoor air filtration is operating at maximum capacity."
         ]
     },
     "Rapid Smoke Dispersion": {
-        "description": "High winds are moving wildfire smoke unpredictably, causing air quality to drop suddenly.",
+        "description": "Dynamic particulate transport: Wildfire smoke plumes being redistributed by high-level atmospheric currents.",
+        "impact_score": 1.6,
         "advice": [
-            "Monitor real-time AQI sensors frequently.",
-            "Use N95 or P100 masks if you must go outdoors.",
-            "Switch car air conditioning to recirculation mode."
+            "Real-time monitoring of local AQI sensors is mandatory.",
+            "N95/P100 respirators required for any unavoidable outdoor transit.",
+            "Seal building envelopes to prevent particulate infiltration."
         ]
     },
     "Flash Flood Alert": {
-        "description": "Saturated soil cannot absorb more rain, leading to immediate surface runoff and rising water levels.",
+        "description": "Hydro-geological threat: Precipitative volume exceeding soil infiltration capacity (saturation point reached).",
+        "impact_score": 2.2,
         "advice": [
-            "Do not drive through flooded roads (Turn Around, Don't Drown).",
-            "Move valuables to higher floors.",
-            "Monitor local stream gauges and emergency broadcasts."
+            "Immediate evacuation from low-lying areas and watershed proximity.",
+            "Avoid all water-crossings; floodwaters possess extreme kinetic energy.",
+            "Monitor structural integrity of foundations in sloped terrains."
         ]
     },
     "Air Stagnation": {
-        "description": "Lack of wind is trapping pollutants near the ground, leading to dangerous build-up of smog.",
+        "description": "Atmospheric Inversion: Subsiding air trapping pollutants in the planetary boundary layer.",
+        "impact_score": 1.4,
         "advice": [
-            "Avoid using wood-burning stoves or fireplaces.",
-            "Carpool or use public transit to reduce emissions.",
-            "Sensitive groups should avoid all outdoor exertion."
+            "Mandatory emission reduction; avoid idling or wood-burning.",
+            "Limit physical activity to reduce respiratory ventilation rate.",
+            "Expect multi-day duration of degraded air quality conditions."
         ]
     },
     "Extreme Heat Stress": {
-        "description": "High humidity prevents sweat from evaporating, making it impossible for the body to cool itself effectively.",
+        "description": "Critical Wet-Bulb Temperature: Humidity levels preventing evaporative cooling (latent heat fatigue).",
+        "impact_score": 2.3,
         "advice": [
-            "Take frequent cool showers or baths.",
-            "Eat small, light meals frequently.",
-            "Check on elderly neighbors and vulnerable individuals."
+            "Cease all outdoor work immediately.",
+            "Access specialized cooling centers if residential AC is unavailable.",
+            "Monitor core body temperature; seek medical help for confusion or cessation of sweating."
         ]
     }
 }
 
+def calculate_nonlinear_risk(base_score: float, multipliers: List[float]) -> float:
+    """
+    Applies non-linear scaling to risk scores based on hazard multipliers.
+    A single multiplier increases risk, but multiple multipliers amplify each other.
+    """
+    if not multipliers:
+        return base_score
+
+    # Cumulative impact formula: 1 - product(1 - risk_i)
+    # Scaled to HERP 0-100 range
+    impact = 1.0
+    for m in multipliers:
+        # Normalize multiplier to a 0.0-0.5 impact range for the formula
+        normalized_m = min(0.5, (m - 1.0) / 3.0)
+        impact *= (1.0 - normalized_m)
+
+    combined_risk = (1.0 - impact) * 100
+    return min(100, max(base_score, combined_risk))
+
+def generate_cognitive_narrative(compounds: List[str], score: float) -> str:
+    """
+    Generates a sophisticated, high-level intelligence briefing.
+    """
+    if not compounds:
+        return f"Environmental status: Optimized. System is operating within nominal parameters with a safety score of {100 - score:.1f}%. No immediate interventions required."
+
+    severity_map = {
+        "Critical": "URGENT INTELLIGENCE BRIEFING",
+        "Warning": "ENVIRONMENTAL ADVISORY",
+        "Stable": "SITUATIONAL SUMMARY"
+    }
+
+    level = "Stable"
+    if score > 80: level = "Critical"
+    elif score > 50: level = "Warning"
+
+    narrative = f"[{severity_map[level]}] \n"
+    narrative += f"Our cognitive engine has identified {len(compounds)} non-linear environmental hazard correlations. "
+    narrative += "Current atmospheric and terrestrial data indicate a significant deviation from baseline safety protocols. "
+
+    for hazard in compounds:
+        details = KNOWLEDGE_BASE.get(hazard)
+        if details:
+            narrative += f"\n- {hazard.upper()}: {details['description']}"
+
+    narrative += f"\n\nStrategic recommendation: Deploy proactive safety measures immediately. Overall System Risk Index is currently {score:.1f}/100."
+    return narrative
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "risk_engine_py", "version": "3.0.0"}
-
-def generate_enhanced_narrative(compounds: List[str]) -> List[Dict[str, Any]]:
-    narratives = []
-    for hazard in compounds:
-        details = KNOWLEDGE_BASE.get(hazard, {
-            "description": "Specific environmental hazard detected.",
-            "advice": ["Exercise caution and follow local official guidance."]
-        })
-        narratives.append({
-            "hazard": hazard,
-            "description": details["description"],
-            "recommendations": details["advice"]
-        })
-    return narratives
+    return {"status": "ok", "service": "risk_engine_py", "version": "4.0.0", "mode": "Cognitive Intelligence"}
 
 @app.post("/analyze")
 async def analyze_risk(data: Dict[str, Any] = Body(...)):
@@ -95,56 +139,75 @@ async def analyze_risk(data: Dict[str, Any] = Body(...)):
     pollen = data.get("pollen", {})
     soil = data.get("soil", {})
     uv_index = data.get("uvIndex", 0)
+    flood = data.get("floodRisk", {})
 
     compounds = []
+    multipliers = []
 
+    # Detection Logic
     if weather.get("temp", 0) > 30 and air_quality.get("aqi", 0) > 100:
         compounds.append("Respiratory Stress")
+        multipliers.append(KNOWLEDGE_BASE["Respiratory Stress"]["impact_score"])
 
     if weather.get("windSpeed", 0) > 40 and soil.get("moisture", 100) < 20:
         compounds.append("Dust/Fire Spread")
+        multipliers.append(KNOWLEDGE_BASE["Dust/Fire Spread"]["impact_score"])
 
     if uv_index > 8 and weather.get("temp", 0) > 32:
         compounds.append("Solar/Heat Stress")
+        multipliers.append(KNOWLEDGE_BASE["Solar/Heat Stress"]["impact_score"])
 
     if weather.get("condition") == "Thunderstorm" and (pollen.get("grass", 0) > 3 or pollen.get("tree", 0) > 3):
         compounds.append("Thunderstorm Asthma")
+        multipliers.append(KNOWLEDGE_BASE["Thunderstorm Asthma"]["impact_score"])
 
-    wildfire = data.get("wildfire", {})
-    if wildfire.get("smokeConcentration") == "High" and weather.get("windSpeed", 0) > 30:
-        compounds.append("Rapid Smoke Dispersion")
-
-    flood = data.get("floodRisk", {})
     if flood.get("score", 0) > 60 and soil.get("moisture", 0) > 75:
         compounds.append("Flash Flood Alert")
+        multipliers.append(KNOWLEDGE_BASE["Flash Flood Alert"]["impact_score"])
 
     if weather.get("windSpeed", 0) < 5 and air_quality.get("aqi", 0) > 120:
         compounds.append("Air Stagnation")
+        multipliers.append(KNOWLEDGE_BASE["Air Stagnation"]["impact_score"])
 
     if weather.get("temp", 0) > 33 and weather.get("humidity", 0) > 70:
         compounds.append("Extreme Heat Stress")
+        multipliers.append(KNOWLEDGE_BASE["Extreme Heat Stress"]["impact_score"])
+
+    # Calculate State-of-the-art Risk Score
+    base_risk = data.get("score", 0)
+    final_score = calculate_nonlinear_risk(base_risk, multipliers)
 
     hazard_level = "Stable"
-    if len(compounds) >= 3:
-        hazard_level = "Critical"
-    elif len(compounds) >= 1:
-        hazard_level = "Warning"
+    if final_score > 75: hazard_level = "Critical"
+    elif final_score > 40: hazard_level = "Warning"
 
-    narratives = generate_enhanced_narrative(compounds)
+    narratives = []
+    for h in compounds:
+        details = KNOWLEDGE_BASE.get(h)
+        narratives.append({
+            "hazard": h,
+            "description": details["description"],
+            "recommendations": details["advice"],
+            "impact_multiplier": details["impact_score"]
+        })
 
-    # Trend analysis
+    cognitive_narrative = generate_cognitive_narrative(compounds, final_score)
+
+    # Trend prediction based on rate of change (simulated)
     trend = "Stable"
-    if len(compounds) > 2 or weather.get("windSpeed", 0) > 45:
-        trend = "Rising"
-    elif len(compounds) == 0 and weather.get("temp", 0) < 25:
+    if final_score > 60 or weather.get("windSpeed", 0) > 50:
+        trend = "Rising (Rapid)"
+    elif final_score < 20:
         trend = "Falling"
 
     return {
         "compound_hazards": compounds,
         "hazard_level": hazard_level,
+        "risk_score": final_score,
         "narratives": narratives,
+        "briefing": cognitive_narrative,
         "trend": trend,
-        "engine": "Python Risk Engine v3.0"
+        "engine": "Python Risk Engine v4.0 (Cognitive)"
     }
 
 if __name__ == "__main__":

@@ -30,4 +30,41 @@ export class ReportService {
       .orderBy('report.createdAt', 'DESC')
       .getMany();
   }
+
+  /**
+   * Identifies clusters of hazards (Heatmapping)
+   */
+  static async getHazardHotzones(lat: number, lon: number, radiusKm: number = 100) {
+    // Uses ST_ClusterDBSCAN to find spatial clusters of reports
+    // This is a state-of-the-art geospatial analysis for identifying emerging local threats
+    const clusters = await this.repository.query(`
+      SELECT
+        ST_AsText(ST_Centroid(ST_Collect(location))) as center,
+        count(*) as intensity,
+        type,
+        cid
+      FROM (
+        SELECT
+          location,
+          type,
+          ST_ClusterDBSCAN(location, eps := 0.01, minpoints := 2) OVER(PARTITION BY type) AS cid
+        FROM community_report
+        WHERE isActive = true
+        AND ST_DWithin(location, ST_SetSRID(ST_Point($1, $2), 4326), $3)
+      ) sq
+      WHERE cid IS NOT NULL
+      GROUP BY cid, type
+    `, [lon, lat, radiusKm * 1000]);
+
+    return clusters.map((c: any) => {
+      const match = c.center.match(/POINT\((.+) (.+)\)/);
+      return {
+        lat: parseFloat(match[2]),
+        lon: parseFloat(match[1]),
+        intensity: parseInt(c.intensity),
+        type: c.type,
+        label: `${c.type} Cluster (Hotzone)`
+      };
+    });
+  }
 }
