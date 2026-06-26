@@ -47,7 +47,8 @@ export class WeatherService {
           temp: weatherData.main.temp,
           condition: weatherData.weather[0].main,
           humidity: weatherData.main.humidity,
-          windSpeed: weatherData.wind.speed
+          windSpeed: weatherData.wind.speed,
+          precipitation: weatherData.rain ? (weatherData.rain['1h'] || weatherData.rain['3h'] || 0) : 0
         },
         airQuality: {
           aqi: this.mapOpenWeatherAQI(airData.main.aqi),
@@ -86,7 +87,8 @@ export class WeatherService {
         temp: 15 + Math.random() * 10,
         condition: "Clear",
         humidity: 40 + Math.random() * 20,
-        windSpeed: 5 + Math.random() * 10
+        windSpeed: 5 + Math.random() * 10,
+        precipitation: Math.random() > 0.8 ? Math.random() * 10 : 0
       },
       airQuality: {
         aqi: 30 + Math.random() * 40,

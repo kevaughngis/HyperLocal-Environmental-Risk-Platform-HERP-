@@ -8,6 +8,7 @@ import { WildfireService } from '../services/WildfireService.js';
 import { SatelliteService } from '../services/SatelliteService.js';
 import { ComplianceService } from '../services/ComplianceService.js';
 import { AIRiskService } from '../services/AIRiskService.js';
+import { WorkflowEngine } from '../services/WorkflowEngine.js';
 import { AppDataSource } from '../db.js';
 import { EnvironmentalAssessment } from '../models/Assessment.js';
 
@@ -37,6 +38,14 @@ export const getRiskAssessment = async (req: Request, res: Response) => {
     const aiRisk = await AIRiskService.getCompoundHazards(combinedData);
     const riskScore = RiskEngine.calculateScore(combinedData);
     const recommendations = RiskEngine.generateRecommendations(combinedData, riskScore);
+
+    // Trigger Workflows
+    WorkflowEngine.process({
+      aqi: combinedData.airQuality?.aqi || 0,
+      flood_score: combinedData.floodRisk?.score || 0,
+      temp: combinedData.weather?.temp || 0,
+      risk_score: riskScore
+    });
 
     const assessment = {
       ...combinedData,

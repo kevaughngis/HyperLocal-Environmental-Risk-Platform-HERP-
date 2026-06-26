@@ -4,6 +4,7 @@ import { IoTService } from '../services/IoTService.js';
 import { EmergencyService } from '../services/EmergencyService.js';
 import { ESGService } from '../services/ESGService.js';
 import { ForecastingService } from '../services/ForecastingService.js';
+import { SimulationService } from '../services/SimulationService.js';
 
 const router = Router();
 
@@ -37,6 +38,23 @@ router.get('/sensors', async (req, res) => {
     res.json(sensors);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch sensor data' });
+  }
+});
+
+router.get('/simulate', async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat as string) || 45.4215;
+    const lon = parseFloat(req.query.lon as string) || -75.6972;
+    const scenario = {
+      tempOffset: parseFloat(req.query.tempOffset as string) || 0,
+      precipitationOffset: parseFloat(req.query.precipitationOffset as string) || 0,
+      aqiOffset: parseFloat(req.query.aqiOffset as string) || 0,
+      windSpeedOffset: parseFloat(req.query.windSpeedOffset as string) || 0,
+    };
+    const results = await SimulationService.runScenario(lat, lon, scenario);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: 'Simulation failed' });
   }
 });
 
