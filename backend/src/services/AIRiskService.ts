@@ -2,13 +2,15 @@ import axios from 'axios';
 import { config } from '../config/index.js';
 
 export class AIRiskService {
-  static async getCompoundHazards(data: any): Promise<{ hazards: string[], level: string, explanation: string }> {
+  static async getCompoundHazards(data: any): Promise<{ hazards: string[], level: string, explanation: string, briefing?: string, trend?: string }> {
     try {
       const response = await axios.post(`${config.RISK_ENGINE_URL}/analyze`, data);
       return {
         hazards: response.data.compound_hazards,
         level: response.data.hazard_level,
-        explanation: response.data.explanation
+        explanation: response.data.explanation,
+        briefing: response.data.briefing,
+        trend: response.data.trend
       };
     } catch (error) {
       console.warn("Python Risk Engine unreachable, using basic analysis");
