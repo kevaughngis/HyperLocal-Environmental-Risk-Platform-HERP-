@@ -13,6 +13,7 @@ import {
   Sprout
 } from 'lucide-react-native';
 import { getAssessment } from './src/api/client';
+import { OfflineSyncService } from './src/services/OfflineSyncService';
 
 interface Assessment {
   riskScore: number;
@@ -50,6 +51,16 @@ export default function App() {
 
   useEffect(() => {
     fetchAssessment();
+
+    // Initial sync
+    OfflineSyncService.syncReports();
+
+    // Periodically try to sync every 5 minutes
+    const syncInterval = setInterval(() => {
+      OfflineSyncService.syncReports();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(syncInterval);
   }, []);
 
   if (loading) {
