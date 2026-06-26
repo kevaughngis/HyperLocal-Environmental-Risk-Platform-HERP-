@@ -3,6 +3,7 @@ import { getRiskAssessment } from '../controllers/RiskController.js';
 import { IoTService } from '../services/IoTService.js';
 import { EmergencyService } from '../services/EmergencyService.js';
 import { ESGService } from '../services/ESGService.js';
+import { ForecastingService } from '../services/ForecastingService.js';
 
 const router = Router();
 
@@ -36,6 +37,17 @@ router.get('/sensors', async (req, res) => {
     res.json(sensors);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch sensor data' });
+  }
+});
+
+router.get('/forecast', async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat as string) || 45.4215;
+    const lon = parseFloat(req.query.lon as string) || -75.6972;
+    const forecast = await ForecastingService.get24hForecast(lat, lon);
+    res.json(forecast);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate risk forecast' });
   }
 });
 
