@@ -4,9 +4,10 @@ import type { Server as HttpServer } from 'http';
 let io: Server;
 
 export function initializeSocket(server: HttpServer) {
+  // Hardened CORS in production could use specific origins from config
   io = new Server(server, {
     cors: {
-      origin: "*",
+      origin: process.env.FRONTEND_URL || "*",
       methods: ["GET", "POST"]
     }
   });
