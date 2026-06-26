@@ -19,8 +19,9 @@ import {
   X,
   MapPin
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMapEvents } from 'react-leaflet';
-import { getHealth, getAssessment, getReports, createReport } from './api/client';
+import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMapEvents, Circle } from 'react-leaflet';
+import { getHealth, getAssessment, getReports, createReport, api } from './api/client';
+import { useSocket } from './api/socket';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -44,6 +45,14 @@ interface CommunityReport {
   type: string;
   description: string;
   createdAt: string;
+}
+
+interface Hotzone {
+  lat: number;
+  lon: number;
+  intensity: number;
+  type: string;
+  label: string;
 }
 
 interface AppNotification {
@@ -83,10 +92,30 @@ function App() {
   const [backendStatus, setBackendStatus] = useState<string>('Checking...');
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [reports, setReports] = useState<CommunityReport[]>([]);
+  const [hotzones, setHotzones] = useState<Hotzone[]>([]);
+  const [forecast, setForecast] = useState<any[]>([]);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showSimulationModal, setShowSimulationModal] = useState(false);
   const [newReport, setNewReport] = useState({ type: 'Flooding', description: '', lat: 0, lon: 0 });
+  const [simulationParams, setSimulationParams] = useState({ tempOffset: 0, precipitationOffset: 0, aqiOffset: 0, windSpeedOffset: 0 });
+  const [simulationResults, setSimulationResults] = useState<any>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  const { setup: setupSocket, cleanup: cleanupSocket } = useSocket((alert) => {
+    setNotifications(prev => [{
+      id: `socket-${Date.now()}`,
+      title: alert.ruleName || 'Real-time Alert',
+      message: alert.message,
+      severity: alert.type === 'WORKFLOW_TRIGGER' ? 'critical' : 'info',
+      timestamp: new Date()
+    }, ...prev]);
+  });
+
+  useEffect(() => {
+    setupSocket();
+    return () => cleanupSocket();
+  }, []);
 
   useEffect(() => {
     getHealth()
@@ -125,6 +154,14 @@ function App() {
     getReports()
       .then(res => setReports(res.data))
       .catch(err => console.error("Failed to fetch reports", err));
+
+    api.get('/reports/hotzones')
+      .then(res => setHotzones(res.data))
+      .catch(err => console.error("Failed to fetch hotzones", err));
+
+    api.get('/risk/forecast')
+      .then(res => setForecast(res.data))
+      .catch(err => console.error("Failed to fetch forecast", err));
   }, []);
 
   const handleReportSubmit = async (e: React.FormEvent) => {
@@ -161,6 +198,12 @@ function App() {
           <p className="text-slate-400 text-sm">HyperLocal Environmental Risk Platform</p>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowSimulationModal(true)}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg font-medium transition-colors shadow-lg"
+          >
+            <Activity size={18} /> "What-If" Simulation
+          </button>
           <button
             onClick={() => setShowReportModal(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium transition-colors shadow-lg"
@@ -237,6 +280,25 @@ function App() {
               "{assessment.aiRisk.explanation}"
             </p>
           )}
+
+          {forecast.length > 0 && (
+            <div className="w-full mt-6 space-y-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block text-center">24h Risk Outlook</span>
+              <div className="flex items-end justify-between h-12 gap-1 px-2">
+                {forecast.filter((_, i) => i % 3 === 0).map((f, i) => (
+                  <div key={i} className="group relative flex-1 flex flex-col items-center">
+                    <div
+                      className={`w-full rounded-t ${f.predictedRisk > 70 ? 'bg-red-500' : (f.predictedRisk > 40 ? 'bg-orange-500' : 'bg-blue-500')}`}
+                      style={{ height: `${f.predictedRisk}%` }}
+                    />
+                    <div className="absolute bottom-full mb-2 hidden group-hover:block bg-slate-900 border border-slate-700 p-2 rounded text-[10px] whitespace-nowrap z-10">
+                       Risk: {f.predictedRisk.toFixed(0)}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Interactive Map */}
@@ -288,6 +350,22 @@ function App() {
                   </div>
                 </Popup>
               </Marker>
+            ))}
+
+            {hotzones.map((zone, i) => (
+              <Circle
+                key={i}
+                center={[zone.lat, zone.lon]}
+                radius={zone.intensity * 500}
+                pathOptions={{ color: 'red', fillColor: 'red', fillOpacity: 0.3 }}
+              >
+                <Popup>
+                  <div className="text-slate-900">
+                    <strong className="block text-red-600">{zone.label}</strong>
+                    <p className="text-sm font-medium">Intensity Level: {zone.intensity}</p>
+                  </div>
+                </Popup>
+              </Circle>
             ))}
           </MapContainer>
         </div>
@@ -426,6 +504,87 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Simulation Modal */}
+      {showSimulationModal && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+            <div className="p-6 border-b md:border-b-0 md:border-r border-slate-700 w-full md:w-1/2">
+              <h3 className="text-xl font-bold flex items-center gap-2 mb-6">
+                <Activity className="text-purple-400" /> "What-If" Parameters
+              </h3>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Temp Offset: {simulationParams.tempOffset}°C</label>
+                  <input type="range" min="-20" max="30" step="1" value={simulationParams.tempOffset} onChange={e => setSimulationParams({...simulationParams, tempOffset: parseInt(e.target.value)})} className="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Precipitation Offset: {simulationParams.precipitationOffset}mm</label>
+                  <input type="range" min="0" max="100" step="1" value={simulationParams.precipitationOffset} onChange={e => setSimulationParams({...simulationParams, precipitationOffset: parseInt(e.target.value)})} className="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">AQI Offset: {simulationParams.aqiOffset}</label>
+                  <input type="range" min="-50" max="200" step="5" value={simulationParams.aqiOffset} onChange={e => setSimulationParams({...simulationParams, aqiOffset: parseInt(e.target.value)})} className="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Wind Offset: {simulationParams.windSpeedOffset}km/h</label>
+                  <input type="range" min="-10" max="80" step="2" value={simulationParams.windSpeedOffset} onChange={e => setSimulationParams({...simulationParams, windSpeedOffset: parseInt(e.target.value)})} className="w-full h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button onClick={() => setShowSimulationModal(false)} className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium transition-colors">Close</button>
+                  <button
+                    onClick={async () => {
+                      const res = await api.get('/risk/simulate', { params: simulationParams });
+                      setSimulationResults(res.data);
+                    }}
+                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium transition-colors"
+                  >
+                    Run Scenario
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-900/50 w-full md:w-1/2">
+              <h3 className="text-xl font-bold flex items-center gap-2 mb-6">
+                <BarChart3 className="text-blue-400" /> Simulated Impacts
+              </h3>
+              {simulationResults ? (
+                <div className="space-y-4">
+                  <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Simulated Risk Score</span>
+                    <span className={`text-4xl font-bold ${simulationResults.results.score > 70 ? 'text-red-500' : 'text-blue-400'}`}>
+                      {simulationResults.results.score}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase block">Impacted Evacuation Routes</span>
+                    {simulationResults.results.routes.map((r: any) => (
+                      <div key={r.id} className="p-2 bg-slate-800 border border-slate-700 rounded-lg flex justify-between items-center">
+                        <span className="text-xs font-medium">{r.name}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${r.status === 'Blocked' ? 'bg-red-500' : (r.status === 'Congested' ? 'bg-orange-500' : 'bg-green-500')}`}>
+                          {r.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase block">Cognitive Recommendations</span>
+                    {simulationResults.results.recommendations.slice(0, 3).map((rec: string, i: number) => (
+                      <p key={i} className="text-xs text-slate-400 italic leading-relaxed">• {rec}</p>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 text-center">
+                  <Activity size={48} className="mb-4 opacity-20" />
+                  <p>Adjust parameters and run scenario to see hypothetical impacts.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
